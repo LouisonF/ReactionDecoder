@@ -13,7 +13,7 @@
         <maven.compiler.target>11</maven.compiler.target>
         <mainClass>uk.ac.ebi.aamtool.ReactionDecoder</mainClass>
     </properties>
-    
+
     <scm>
         <connection>scm:git:git://github.com/asad/ReactionDecoder.git</connection>
         <developerConnection>scm:git:git@github.com:asad/ReactionDecoder.git
@@ -75,7 +75,7 @@
             <name>John May</name>
         </developer>
     </developers>
-    
+
     <contributors>
         <contributor>
             <name>Sergio Martínez Cuesta</name>
@@ -93,7 +93,7 @@
             <name>Janet M. Thornton</name>
         </contributor>
     </contributors>
-    
+
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
@@ -101,17 +101,27 @@
             <version>4.13.1</version>
             <scope>test</scope>
         </dependency>
-        
+
         <dependency>
             <groupId>org.jgrapht</groupId>
             <artifactId>jgrapht-core</artifactId>
             <version>1.4.0</version>
         </dependency>
-        
+
         <dependency>
             <groupId>org.openscience.cdk</groupId>
             <artifactId>cdk-bundle</artifactId>
-            <version>2.4-SNAPSHOT</version>
+            <version>2.7.1</version>
+        </dependency>
+        <dependency>
+          <groupId>com.google.guava</groupId>
+          <artifactId>guava</artifactId>
+          <version>31.0.1-jre</version>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-math3</artifactId>
+          <version>3.6.1</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/commons-cli/commons-cli -->
         <dependency>
@@ -119,13 +129,13 @@
             <artifactId>commons-cli</artifactId>
             <version>1.4</version>
         </dependency>
-        
+
         <dependency>
             <groupId>org.apache.directory.studio</groupId>
             <artifactId>org.apache.commons.io</artifactId>
             <version>2.4</version>
         </dependency>
-       
+
     </dependencies>
     <profiles>
         <profile>
@@ -188,7 +198,7 @@
                 </plugins>
             </build>
         </profile>
-        
+
         <profile>
             <id>ossrh</id>
             <build>
@@ -273,18 +283,18 @@
                             </execution>
                         </executions>
                     </plugin>
-                    <plugin> 
+                    <plugin>
                         <!-- explicitly define maven-deploy-plugin after other to force exec order -->
-                        <artifactId>maven-deploy-plugin</artifactId> 
-                        <executions> 
-                            <execution> 
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <executions>
+                            <execution>
                                 <id>deploy</id>
                                 <phase>deploy</phase>
                                 <goals>
                                     <goal>deploy</goal>
-                                </goals> 
-                            </execution> 
-                        </executions> 
+                                </goals>
+                            </execution>
+                        </executions>
                     </plugin>
                     <plugin>
                         <groupId>org.sonatype.plugins</groupId>
