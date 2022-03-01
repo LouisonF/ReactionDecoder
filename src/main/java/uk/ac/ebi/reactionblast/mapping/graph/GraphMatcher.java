@@ -159,9 +159,9 @@ public class GraphMatcher extends Debugger {
             if (threadsAvailable > jobMap.size()) {
                 threadsAvailable = jobMap.size();
             }
-            
+
             if (threadsAvailable > 4) {
-                threadsAvailable = 4;
+                threadsAvailable = 1; //Original value is 4
             }
 
             if (DEBUG) {
@@ -189,7 +189,7 @@ public class GraphMatcher extends Debugger {
 
                 /*
                  * Report All Cycles
-                 * or 
+                 * or
                  * CycleFinder cycles = or(Cycles.all(), Cycles.all());
                  * CycleFinder cycles = Cycles.or(Cycles.all(), Cycles.relevant());
                  */

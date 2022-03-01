@@ -125,7 +125,8 @@ public abstract class StereoCenteralityTool extends Utility {
          * time out function added
          */
         Boolean flag = false;
-        ExecutorService executor = Executors.newCachedThreadPool();
+        // ExecutorService executor = Executors.newCachedThreadPool();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         Callable<Boolean> task = () -> {
             perceptor.perceive(ac);
             return true;
