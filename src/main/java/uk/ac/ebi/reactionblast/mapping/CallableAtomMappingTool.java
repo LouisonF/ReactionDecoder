@@ -36,6 +36,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
 
 import org.openscience.cdk.interfaces.IReaction;
 import org.openscience.cdk.tools.ILoggingTool;
@@ -120,8 +123,10 @@ public class CallableAtomMappingTool implements Serializable {
         ExecutorService executor;
         executor = Executors.newSingleThreadExecutor();
         int jobCounter = 0;
+        Future<Reactor> f;
+        Reactor chosen;
         try {
-            CompletionService<Reactor> cs = new ExecutorCompletionService<>(executor);
+            // CompletionService<Reactor> cs = new ExecutorCompletionService<>(executor);
             /*
              * MIN Algorithm
              */
@@ -139,7 +144,15 @@ public class CallableAtomMappingTool implements Serializable {
                 LOGGER.error(e);
             }
             MappingThread minThread = new MappingThread("IMappingAlgorithm.MIN", cleanedReaction1, MIN, removeHydrogen);
-            cs.submit(minThread);
+            // f = cs.take(); //blocks until one task completes
+            // while(!cs.awaitTermination()) {
+            //   minThread.sleep(600);
+            // }
+            f = executor.submit(minThread);
+            chosen = f.get();
+            putSolution(chosen.getAlgorithm(), chosen);
+            // cs.submit(minThread);
+            // cs.execute(minThread);
             jobCounter++;
             /*
              * MAX Algorithm
@@ -161,7 +174,14 @@ public class CallableAtomMappingTool implements Serializable {
                 out.println(NEW_LINE + "STEP a: Calling Mapping Models" + NEW_LINE);
             }
             MappingThread maxThread = new MappingThread("IMappingAlgorithm.MAX", cleanedReaction2, MAX, removeHydrogen);
-            cs.submit(maxThread);
+            // f = cs.take(); //blocks until one task completes
+            // while(!cs.awaitTermination()) {
+            //   maxThread.sleep(600);
+            // }
+            f = executor.submit(maxThread);
+            chosen = f.get();
+            putSolution(chosen.getAlgorithm(), chosen);
+            // cs.execute(maxThread)
             jobCounter++;
 
             /*
@@ -181,7 +201,14 @@ public class CallableAtomMappingTool implements Serializable {
                 LOGGER.error(e);
             }
             MappingThread maxMixtureThread = new MappingThread("IMappingAlgorithm.MIXTURE", cleanedReaction3, MIXTURE, removeHydrogen);
-            cs.submit(maxMixtureThread);
+            // f = cs.take(); //blocks until one task completes
+            // while(!cs.awaitTermination()) {
+            //   maxMixtureThread.sleep(600);
+            // }
+            f = executor.submit(maxMixtureThread);
+            chosen = f.get();
+            putSolution(chosen.getAlgorithm(), chosen);
+                      // cs.execute(maxMixtureThread);
             jobCounter++;
 
             if (checkComplex) {/*
@@ -201,17 +228,24 @@ public class CallableAtomMappingTool implements Serializable {
                     LOGGER.error(e);
                 }
                 MappingThread ringThread = new MappingThread("IMappingAlgorithm.RINGS", cleanedReaction4, RINGS, removeHydrogen);
-                cs.submit(ringThread);
+                // f = cs.take(); //blocks until one task completes
+                // while(!cs.awaitTermination()) {
+                //   ringThread.sleep(600);
+                // }
+                f = executor.submit(ringThread);
+                chosen = f.get();
+                putSolution(chosen.getAlgorithm(), chosen);
+                // cs.execute(ringThread);
                 jobCounter++;
             }
 
             /*
              * Collect the results
              */
-            for (int i = 0; i < jobCounter; i++) {
-                Reactor chosen = cs.take().get();
-                putSolution(chosen.getAlgorithm(), chosen);
-            }
+            // for (int i = 0; i < jobCounter; i++) {
+            //     Reactor chosen = cs.take().get();
+            //     putSolution(chosen.getAlgorithm(), chosen);
+            // }
             executor.shutdown();
             /*
              Wait until all threads are finish
