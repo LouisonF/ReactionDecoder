@@ -29,7 +29,10 @@ import static java.lang.System.getProperty;
 import static java.lang.System.out;
 import static java.util.Collections.synchronizedMap;
 import static java.util.Collections.unmodifiableMap;
+
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
@@ -38,6 +41,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.CountDownLatch;
 
 import org.openscience.cdk.interfaces.IReaction;
@@ -120,149 +124,103 @@ public class CallableAtomMappingTool implements Serializable {
          */
         ThreadSafeCache<String, MCSSolution> mappingcache = ThreadSafeCache.getInstance();
 
-        ExecutorService executor;
-        executor = Executors.newSingleThreadExecutor();
-        int jobCounter = 0;
-        Future<Reactor> f;
-        Reactor chosen;
-        try {
-            // CompletionService<Reactor> cs = new ExecutorCompletionService<>(executor);
-            /*
-             * MIN Algorithm
-             */
-            LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
-            LOGGER.info("b) Local Model: ");
-            if (DEBUG) {
-                out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
-                out.println(NEW_LINE + "STEP b: Local Model Standardize Reactions" + NEW_LINE);
-            }
-            IReaction cleanedReaction1 = null;
-            try {
-                cleanedReaction1 = standardizer.standardize(reaction);
-            } catch (Exception e) {
-                LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
-                LOGGER.error(e);
-            }
-            MappingThread minThread = new MappingThread("IMappingAlgorithm.MIN", cleanedReaction1, MIN, removeHydrogen);
-            // f = cs.take(); //blocks until one task completes
-            // while(!cs.awaitTermination()) {
-            //   minThread.sleep(600);
-            // }
-            f = executor.submit(minThread);
-            chosen = f.get();
-            putSolution(chosen.getAlgorithm(), chosen);
-            // cs.submit(minThread);
-            // cs.execute(minThread);
-            jobCounter++;
-            /*
-             * MAX Algorithm
-             */
-            LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
-            LOGGER.info("a) Global Model: ");
-            if (DEBUG) {
-                out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
-                out.println(NEW_LINE + "STEP 1: Global Model Standardize Reactions" + NEW_LINE);
-            }
-            IReaction cleanedReaction2 = null;
-            try {
-                cleanedReaction2 = standardizer.standardize(reaction);
-            } catch (Exception e) {
-                LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
-                LOGGER.error(e);
-            }
-            if (DEBUG) {
-                out.println(NEW_LINE + "STEP a: Calling Mapping Models" + NEW_LINE);
-            }
-            MappingThread maxThread = new MappingThread("IMappingAlgorithm.MAX", cleanedReaction2, MAX, removeHydrogen);
-            // f = cs.take(); //blocks until one task completes
-            // while(!cs.awaitTermination()) {
-            //   maxThread.sleep(600);
-            // }
-            f = executor.submit(maxThread);
-            chosen = f.get();
-            putSolution(chosen.getAlgorithm(), chosen);
-            // cs.execute(maxThread)
-            jobCounter++;
+		ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		CompletionService<Reactor> cs = new ExecutorCompletionService<>(executor);
+		int jobCounter = checkComplex ? 4 : 3; // Adjust based on algorithms used
+		CountDownLatch latch = new CountDownLatch(jobCounter);
+        // Set a timeout value (in seconds)
+		long timeout = 6000; // 600 seconds
+		List<Future<Reactor>> futures = new ArrayList<>();
+		/*
+		* MIN Algorithm
+		*/
+		LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
+		LOGGER.info("b) Local Model: ");
+		if (DEBUG) {
+			out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
+			out.println(NEW_LINE + "STEP b: Local Model Standardize Reactions" + NEW_LINE);
+		}
+		IReaction cleanedReaction1 = null;
+		try {
+			cleanedReaction1 = standardizer.standardize(reaction);
+		} catch (Exception e) {
+			LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
+			LOGGER.error(e);
+		}
+		futures.add(cs.submit(new MappingThread("IMappingAlgorithm.MIN", cleanedReaction1, MIN, removeHydrogen, latch)));
 
-            /*
-             * MIXTURE Algorithm
-             */
-            LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
-            LOGGER.info("c) Mixture Model: ");
-            if (DEBUG) {
-                out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
-                out.println(NEW_LINE + "STEP c: Mixture Model Standardize Reactions" + NEW_LINE);
-            }
-            IReaction cleanedReaction3 = null;
-            try {
-                cleanedReaction3 = standardizer.standardize(reaction);
-            } catch (Exception e) {
-                LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
-                LOGGER.error(e);
-            }
-            MappingThread maxMixtureThread = new MappingThread("IMappingAlgorithm.MIXTURE", cleanedReaction3, MIXTURE, removeHydrogen);
-            // f = cs.take(); //blocks until one task completes
-            // while(!cs.awaitTermination()) {
-            //   maxMixtureThread.sleep(600);
-            // }
-            f = executor.submit(maxMixtureThread);
-            chosen = f.get();
-            putSolution(chosen.getAlgorithm(), chosen);
-                      // cs.execute(maxMixtureThread);
-            jobCounter++;
+		/*
+		* MAX Algorithm
+		*/
+		LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
+		LOGGER.info("a) Global Model: ");
+		if (DEBUG) {
+			out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
+			out.println(NEW_LINE + "STEP 1: Global Model Standardize Reactions" + NEW_LINE);
+		}
+		IReaction cleanedReaction2 = null;
+		try {
+			cleanedReaction2 = standardizer.standardize(reaction);
+		} catch (Exception e) {
+			LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
+			LOGGER.error(e);
+		}
+		if (DEBUG) {
+			out.println(NEW_LINE + "STEP a: Calling Mapping Models" + NEW_LINE);
+		}
+		futures.add(cs.submit(new MappingThread("IMappingAlgorithm.MAX", cleanedReaction2, MAX, removeHydrogen, latch)));
 
-            if (checkComplex) {/*
-             * RINGS Minimization
-                 */
-                LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
-                LOGGER.info("d) Rings Model: ");
-                if (DEBUG) {
-                    out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
-                    out.println(NEW_LINE + "STEP d: Rings Model Standardize Reactions" + NEW_LINE);
-                }
-                IReaction cleanedReaction4 = null;
-                try {
-                    cleanedReaction4 = standardizer.standardize(reaction);
-                } catch (Exception e) {
-                    LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
-                    LOGGER.error(e);
-                }
-                MappingThread ringThread = new MappingThread("IMappingAlgorithm.RINGS", cleanedReaction4, RINGS, removeHydrogen);
-                // f = cs.take(); //blocks until one task completes
-                // while(!cs.awaitTermination()) {
-                //   ringThread.sleep(600);
-                // }
-                f = executor.submit(ringThread);
-                chosen = f.get();
-                putSolution(chosen.getAlgorithm(), chosen);
-                // cs.execute(ringThread);
-                jobCounter++;
-            }
+		/*
+		* MIXTURE Algorithm
+		*/
+		LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
+		LOGGER.info("c) Mixture Model: ");
+		if (DEBUG) {
+			out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
+			out.println(NEW_LINE + "STEP c: Mixture Model Standardize Reactions" + NEW_LINE);
+		}
+		IReaction cleanedReaction3 = null;
+		try {
+			cleanedReaction3 = standardizer.standardize(reaction);
+		} catch (Exception e) {
+			LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
+			LOGGER.error(e);
+		}
+		futures.add(cs.submit(new MappingThread("IMappingAlgorithm.MIXTURE", cleanedReaction3, MIXTURE, removeHydrogen, latch)));   
 
-            /*
-             * Collect the results
-             */
-            // for (int i = 0; i < jobCounter; i++) {
-            //     Reactor chosen = cs.take().get();
-            //     putSolution(chosen.getAlgorithm(), chosen);
-            // }
-            executor.shutdown();
-            /*
-             Wait until all threads are finish
-             *
-             */
-            while (!executor.isTerminated()) {
-            }
-            if (DEBUG) {
-                System.out.println("======DONE CallableAtomMappingTool=======");
-            }
-            gc();
-        } catch (InterruptedException | ExecutionException e) {
-            LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
-            LOGGER.error(e);
-        } finally {
-            executor.shutdown();
-        }
+		if (checkComplex) {/*
+			* 
+			* RINGS Minimization
+			*/
+			LOGGER.info(NEW_LINE + "|++++++++++++++++++++++++++++|");
+			LOGGER.info("d) Rings Model: ");
+			if (DEBUG) {
+				out.println(NEW_LINE + "-----------------------------------" + NEW_LINE);
+				out.println(NEW_LINE + "STEP d: Rings Model Standardize Reactions" + NEW_LINE);
+			}
+			IReaction cleanedReaction4 = null;
+			try {
+				cleanedReaction4 = standardizer.standardize(reaction);
+			} catch (Exception e) {
+				LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
+				LOGGER.error(e);
+			}
+			futures.add(cs.submit(new MappingThread("IMappingAlgorithm.RINGS", cleanedReaction4, RINGS, removeHydrogen, latch)));
+		}
+
+		/*
+		* Collect the results
+		*/
+		for (Future<Reactor> future : futures) {
+			try {
+				Reactor chosen = future.get(timeout,TimeUnit.SECONDS);
+				putSolution(chosen.getAlgorithm(), chosen);
+			} catch (InterruptedException | TimeoutException | ExecutionException e) {
+				LOGGER.debug("ERROR: in AtomMappingTool: " + e.getMessage());
+				LOGGER.error(e);
+			}
+		}
+		executor.shutdown();
         if (DEBUG) {
             System.out.println("!!!!Atom-Atom Mapping Done!!!!");
         }

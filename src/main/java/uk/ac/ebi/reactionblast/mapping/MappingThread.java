@@ -19,6 +19,7 @@
 package uk.ac.ebi.reactionblast.mapping;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 
 import org.openscience.cdk.interfaces.IReaction;
 import org.openscience.cdk.tools.ILoggingTool;
@@ -36,6 +37,7 @@ class MappingThread implements Callable<Reactor> {
     private final IReaction cleanedReaction;
     private final IMappingAlgorithm algorithm;
     private final boolean removeHydrogen;
+	private CountDownLatch latch;
 
     /**
      *
@@ -55,7 +57,18 @@ class MappingThread implements Callable<Reactor> {
         LOGGER.info("|Atom Atom Mapping Tool Initialized for " + message);
     }
 
-    @Override
+    public MappingThread(String message, IReaction cleanedReaction, 
+			IMappingAlgorithm algorithm, boolean removeHydrogen,
+			CountDownLatch latch) {
+		this.cleanedReaction = cleanedReaction;
+        this.algorithm = algorithm;
+        this.removeHydrogen = removeHydrogen;
+		this.latch = latch; 
+        LOGGER.info("|++++++++++++++++++++++++++++|");
+        LOGGER.info("|Atom Atom Mapping Tool Initialized for " + message);
+	}
+
+	@Override
     public Reactor call() throws Exception {
         try {
             Reactor reactor;
