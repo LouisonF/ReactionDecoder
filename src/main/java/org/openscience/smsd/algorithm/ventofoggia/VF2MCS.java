@@ -111,7 +111,7 @@ public final class VF2MCS extends BaseMCS implements IResults {
         if (timeoutVF || (maxVFMappingSize != (source.getAtomCount())
                 && maxVFMappingSize != (target.getAtomCount()))) {
 
-            List<Map<Integer, Integer>> mcsVFSeeds = new ArrayList<>();
+            List<Map<Integer, Integer>> mcsVFSeeds = new ArrayList<>(allLocalMCS);
 
             /*
              * Copy VF based MCS solution in the seed
@@ -132,16 +132,14 @@ public final class VF2MCS extends BaseMCS implements IResults {
             /*
              *   Assign the threads
              */
-            int threadsAvailable = getRuntime().availableProcessors() - 1;
-            if (threadsAvailable == 0) {
-                threadsAvailable = 1;
-            } else if (threadsAvailable > 2) {
-                threadsAvailable = 2;
-            }
-
-//            ExecutorService executor = Executors.newCachedThreadPool();
+            // int threadsAvailable = getRuntime().availableProcessors() - 1;
+            // if (threadsAvailable == 0) {
+            //     threadsAvailable = 1;
+            // } else if (threadsAvailable > 2) {
+            //     threadsAvailable = 2;
+            // }
+			int threadsAvailable = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
             ExecutorService executor = Executors.newFixedThreadPool(threadsAvailable);
-//            ExecutorService executor = Executors.newSingleThreadExecutor();
             CompletionService<List<AtomAtomMapping>> cs = new ExecutorCompletionService<>(executor);
 
             /*
@@ -182,18 +180,13 @@ public final class VF2MCS extends BaseMCS implements IResults {
             //boolean moleculeConnected = isMoleculeConnected(source, targetClone);
             int jobCounter = 0;
 
-            if (targetClone != null) {
-                if (source.getBondCount() > 0
-                        && targetClone.getBondCount() > 0) {
-                    if (DEBUG) {
-                        System.out.println(" CALLING UIT ");
-                    }
-                    MCSSeedGenerator mcsSeedGeneratorUIT
-                            = new MCSSeedGenerator(source, targetClone,
-                                    Algorithm.CDKMCS, atomMatcher, bondMatcher);
-                    cs.submit(mcsSeedGeneratorUIT);
-                    jobCounter++;
+            if (targetClone != null && source.getBondCount() > 0 && targetClone.getBondCount() > 0) {
+                if (DEBUG) {
+                    System.out.println(" CALLING UIT ");
                 }
+                MCSSeedGenerator mcsSeedGeneratorUIT = new MCSSeedGenerator(source, targetClone, Algorithm.CDKMCS, am, bm);
+                cs.submit(mcsSeedGeneratorUIT);
+                jobCounter++;
             }
 
             if (DEBUG) {
@@ -213,16 +206,9 @@ public final class VF2MCS extends BaseMCS implements IResults {
              * Collect the results
              */
             for (int i = 0; i < jobCounter; i++) {
-                List<AtomAtomMapping> chosen;
                 try {
-                    chosen = cs.take().get();
-                    chosen.stream().map((mapping) -> {
-                        Map<Integer, Integer> map = new TreeMap<>();
-                        map.putAll(mapping.getMappingsByIndex());
-                        return map;
-                    }).forEach((map) -> {
-                        mcsSeeds.add(map);
-                    });
+                    List<AtomAtomMapping> chosen = cs.take().get();
+                    chosen.stream().map(mapping -> new TreeMap<>(mapping.getMappingsByIndex())).forEach(mcsSeeds::add);
                 } catch (Exception ex) {
                     if (DEBUG) {
                         ex.printStackTrace();
@@ -235,7 +221,13 @@ public final class VF2MCS extends BaseMCS implements IResults {
              Wait until all threads are finish
              */
 
-            while (!executor.isTerminated()) {
+            // while (!executor.isTerminated()) {
+            // }
+            // System.gc();
+			try {
+                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
             System.gc();
 
@@ -281,10 +273,10 @@ public final class VF2MCS extends BaseMCS implements IResults {
             /*
              * Add seeds from VF MCS
              */
-            mcsVFSeeds.stream().filter((map) -> (!map.isEmpty()
-                    && !super.isCliquePresent(map, cleanedMCSSeeds))).forEach((_item) -> {
-                cleanedMCSSeeds.addAll(mcsVFSeeds);
-            });
+            mcsVFSeeds.stream().filter(map -> !map.isEmpty() &&
+			 !super.isCliquePresent(map, cleanedMCSSeeds)).
+			 forEach(cleanedMCSSeeds::add);
+
             /*
              * Sort biggest clique to smallest
              */
@@ -394,7 +386,7 @@ public final class VF2MCS extends BaseMCS implements IResults {
          */
         if (!timeoutVF) {
 
-            List<Map<Integer, Integer>> mcsVFSeeds = new ArrayList<>();
+            List<Map<Integer, Integer>> mcsVFSeeds = new ArrayList<>(allLocalMCS);
 
             /*
              * Copy VF based MCS solution in the seed
@@ -413,7 +405,10 @@ public final class VF2MCS extends BaseMCS implements IResults {
 
             long startTimeSeeds = System.nanoTime();
 
-            ExecutorService executor = Executors.newCachedThreadPool();
+            // ExecutorService executor = Executors.newCachedThreadPool();
+            // CompletionService<List<AtomAtomMapping>> cs = new ExecutorCompletionService<>(executor);
+            int threadsAvailable = Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+            ExecutorService executor = Executors.newFixedThreadPool(threadsAvailable);
             CompletionService<List<AtomAtomMapping>> cs = new ExecutorCompletionService<>(executor);
 
             /*
@@ -430,9 +425,8 @@ public final class VF2MCS extends BaseMCS implements IResults {
                     IQueryAtom a2 = (IQueryAtom) b1.getAtom(1);
                     for (IBond b2 : targetClone.bonds()) {
                         boolean matches = bond.matches(b2);
-                        if (a1.matches(b2.getAtom(0)) && a2.matches(b2.getAtom(1)) && !matches) {
-                            bondRemovedT.add(b2);
-                        } else if (a2.matches(b2.getAtom(0)) && a1.matches(b2.getAtom(1)) && !matches) {
+                        if ((a1.matches(b2.getAtom(0)) && a2.matches(b2.getAtom(1)) && !matches) ||
+                            (a2.matches(b2.getAtom(0)) && a1.matches(b2.getAtom(1)) && !matches)) {
                             bondRemovedT.add(b2);
                         }
                     }
@@ -452,11 +446,9 @@ public final class VF2MCS extends BaseMCS implements IResults {
             MCSSeedGenerator mcsSeedGeneratorKoch
                     = new MCSSeedGenerator((IQueryAtomContainer) source, targetClone, Algorithm.MCSPlus);
 
-            int jobCounter = 0;
             cs.submit(mcsSeedGeneratorUIT);
-            jobCounter++;
             cs.submit(mcsSeedGeneratorKoch);
-            jobCounter++;
+
 
             /*
              * Generate the UIT based MCS seeds
@@ -465,24 +457,26 @@ public final class VF2MCS extends BaseMCS implements IResults {
             /*
              * Collect the results
              */
-            for (int i = 0; i < jobCounter; i++) {
-                List<AtomAtomMapping> chosen;
+            for (int i = 0; i < 2; i++) {
                 try {
+					List<AtomAtomMapping> chosen;
                     chosen = cs.take().get();
-                    chosen.stream().map((mapping) -> {
-                        Map<Integer, Integer> map = new TreeMap<>();
-                        map.putAll(mapping.getMappingsByIndex());
-                        return map;
-                    }).forEach((map) -> {
+                    for (AtomAtomMapping mapping : chosen) {
+                        Map<Integer, Integer> map = new TreeMap<>(mapping.getMappingsByIndex());
                         mcsSeeds.add(map);
-                    });
+                    }
                 } catch (InterruptedException | ExecutionException ex) {
                     LOGGER.error(Level.SEVERE, null, ex);
                 }
             }
             executor.shutdown();
             // Wait until all threads are finish
-            while (!executor.isTerminated()) {
+            // while (!executor.isTerminated()) {
+            // }
+			try {
+                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
             System.gc();
 
